@@ -116,15 +116,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildConfig(): Config {
+        var deviceConfig = DeviceConfigManager.getSavedConfig(applicationContext)
+        if (deviceConfig == null) {
+            deviceConfig = DeviceConfigManager.fetchAndSaveNewConfig(applicationContext)
+        }
+
         val iface = Interface.Builder()
-            .parsePrivateKey("LocalConfig.CLIENT_PRIVATE_KEY")
-            .addAddress(InetNetwork.parse("10.8.0.2/32"))
-            .addDnsServer(InetAddress.getByName("1.1.1.1"))
+            .parsePrivateKey(deviceConfig.clientPrivateKey)
+            .addAddress(InetNetwork.parse(deviceConfig.clientAddress))
+            .addDnsServer(InetAddress.getByName(deviceConfig.dns))
             .build()
 
         val peer = Peer.Builder()
-            .parsePublicKey("LocalConfig.SERVER_PUBLIC_KEY")
-            .setEndpoint(InetEndpoint.parse("LocalConfig.SERVER_ENDPOINT"))
+            .parsePublicKey(deviceConfig.serverPublicKey)
+            .setEndpoint(InetEndpoint.parse(deviceConfig.serverEndpoint))
             .addAllowedIp(InetNetwork.parse("0.0.0.0/0"))
             .build()
 
