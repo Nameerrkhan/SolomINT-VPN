@@ -22,6 +22,7 @@ import com.wireguard.config.Peer
 import kotlinx.coroutines.launch
 import java.net.InetAddress
 import androidx.compose.ui.Alignment
+import android.os.Build
 
 class MainActivity : ComponentActivity() {
 
@@ -35,6 +36,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 200)
+            }
+        }
         backend = GoBackend(applicationContext)
         tunnel = MyTunnel("MyVPNTunnel")
 
@@ -52,7 +58,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun toggleConnection() {
-        if (tunnel.state == Tunnel.State.UP) disconnect() else requestPermissionAndConnect()
+        if (statusState.value == "Connected") {
+            disconnect()
+        } else {
+            requestPermissionAndConnect()
+        }
     }
 
     private fun requestPermissionAndConnect() {
@@ -74,6 +84,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 backend.setState(tunnel, Tunnel.State.UP, buildConfig())
+                startService(Intent(this@MainActivity, VpnStatusService::class.java))
                 statusState.value = "Connected"
             } catch (e: Exception) {
                 statusState.value = "Error: ${e.message ?: e.javaClass.simpleName}"
@@ -84,23 +95,36 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 backend.setState(tunnel, Tunnel.State.DOWN, null)
+                stopService(Intent(this@MainActivity, VpnStatusService::class.java))
                 statusState.value = "Disconnected"
             } catch (e: Exception) {
                 statusState.value = "Error: ${e.message ?: e.javaClass.simpleName}"
             }
         }
     }
+    private fun isSystemVpnActive(): Boolean {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java)
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val actuallyConnected = isSystemVpnActive()
+        statusState.value = if (actuallyConnected) "Connected" else "Disconnected"
+    }
 
     private fun buildConfig(): Config {
         val iface = Interface.Builder()
-            .parsePrivateKey("YOUR_CLIENT_PRIVATE_KEY_HERE")
+            .parsePrivateKey("LocalConfig.CLIENT_PRIVATE_KEY")
             .addAddress(InetNetwork.parse("10.8.0.2/32"))
             .addDnsServer(InetAddress.getByName("1.1.1.1"))
             .build()
 
         val peer = Peer.Builder()
-            .parsePublicKey("YOUR_SERVER_PUBLIC_KEY_HERE")
-            .setEndpoint(InetEndpoint.parse("YOUR_SERVER_IP:51820"))
+            .parsePublicKey("LocalConfig.SERVER_PUBLIC_KEY")
+            .setEndpoint(InetEndpoint.parse("LocalConfig.SERVER_ENDPOINT"))
             .addAllowedIp(InetNetwork.parse("0.0.0.0/0"))
             .build()
 

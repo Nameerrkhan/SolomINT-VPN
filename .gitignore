@@ -13,13 +13,4 @@
 .externalNativeBuild
 .cxx
 local.properties
-
-*.pem
-*.key
-local.properties
-*.jks
-*.keystore
-.gradle/
-/build/
-/app/build/
-.idea/workspace.xml
+**/LocalConfig.kt
