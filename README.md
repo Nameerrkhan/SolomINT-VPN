@@ -10,7 +10,7 @@ A native Android app (Kotlin + Jetpack Compose) that dynamically registers each 
 
 ## Why I built this
 
-Most consumer VPNs are either expensive subscriptions or free apps that quietly sell user data. I wanted to understand — end to end — what it actually takes to build a trustworthy VPN, from raw cloud infrastructure up to a working, reliable, multi-device-capable mobile client, before deciding whether to build this into a real product for the South Asia market.
+Most consumer VPNs are either expensive subscriptions or free apps that quietly sell user data. I wanted to understand — end to end — what it actually takes to build a trustworthy VPN, from raw cloud infrastructure up to a working, reliable, multi-device-capable mobile client, before deciding whether to build this into a real product.
 
 ## Architecture
 
