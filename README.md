@@ -1,6 +1,6 @@
 # SolomINT VPN — Android WireGuard VPN Client (MVP)
 
-A personal learning project: a working Android VPN client built from scratch, targeting an affordable, trustworthy VPN experience for South Asian users. Built with a near-zero budget on free-tier cloud infrastructure.
+A personal learning project: a working Android VPN client built from scratch, targeting an affordable, trustworthy VPN experience. Built with a near-zero budget on free-tier cloud infrastructure.
 
 > ⚠️ **This is a personal/portfolio learning project, not a production security product.** It has not been security-audited and should not be used to protect sensitive traffic.
 
