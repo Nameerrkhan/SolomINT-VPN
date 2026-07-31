@@ -1,16 +1,16 @@
 # SolomINT VPN — Android WireGuard VPN Client (MVP)
 
-A personal learning project: a working Android VPN client built from scratch, targeting an affordable, trustworthy VPN experience. Built with a near-zero budget on free-tier cloud infrastructure.
+A personal learning project: a working Android VPN client built from scratch on a near-zero budget, using free-tier cloud infrastructure end to end.
 
 > ⚠️ **This is a personal/portfolio learning project, not a production security product.** It has not been security-audited and should not be used to protect sensitive traffic.
 
 ## What this is
 
-A native Android app (Kotlin + Jetpack Compose) that dynamically registers each device with a self-hosted backend, receives a unique WireGuard identity, and establishes a real VPN tunnel — using the open-source [`wireguard-android`](https://github.com/WireGuard/wireguard-android) tunnel library under the hood. The app tracks real system-level VPN state (not just its own in-memory assumptions) and runs a foreground service with a persistent notification, matching how production VPN apps stay alive in the background.
+A native Android app (Kotlin + Jetpack Compose) that dynamically registers each device with a self-hosted backend, receives a unique WireGuard identity, and establishes a real VPN tunnel — using the open-source [`wireguard-android`](https://github.com/WireGuard/wireguard-android) tunnel library under the hood. The app tracks real system-level VPN state (not just its own in-memory assumptions), runs a foreground service with a persistent notification, and includes IPv6 leak protection, kill switch guidance, a connection-loss monitor, and per-app split tunneling.
 
 ## Why I built this
 
-Most consumer VPNs are either expensive subscriptions or free apps that quietly sell user data. I wanted to understand — end to end — what it actually takes to build a trustworthy VPN, from raw cloud infrastructure up to a working, reliable, multi-device-capable mobile client, before deciding whether to build this into a real product.
+I wanted to understand — end to end — what it actually takes to build a trustworthy VPN, from raw cloud infrastructure up to a working, reliable mobile client with the same core features found in established VPN apps.
 
 ## Architecture
 
@@ -30,9 +30,18 @@ Cloud VPS (Ubuntu, AWS EC2) — WireGuard server
    Internet
 ```
 
-- **Client**: Android app using `VpnService` + the WireGuard tunnel library. On first launch, it calls the backend to get a unique identity, stores it in `EncryptedSharedPreferences`, and reuses it on every subsequent launch (no re-registration). Compose UI shows live status synced from real system state; a foreground service keeps a persistent "Connected" notification.
+- **Client**: Android app using `VpnService` + the WireGuard tunnel library. On first launch, it calls the backend to get a unique identity, stores it in `EncryptedSharedPreferences`, and reuses it on every subsequent launch. Compose UI shows live status synced from real system state; a foreground service keeps a persistent "Connected" notification.
 - **Backend**: A minimal Flask API on the same VPS. `/register-device` generates a fresh WireGuard key pair, assigns the next free internal IP (tracked in SQLite to avoid collisions), and registers the new peer directly on the live `wg0` interface via `wg set`.
 - **Server**: WireGuard running on a cloud VPS, with NAT/IP forwarding routing client traffic to the internet.
+
+## Features
+
+- Real system-level VPN state tracking (not just in-app assumptions)
+- Foreground service with persistent notification, so the tunnel survives being backgrounded
+- Per-device dynamic key/IP issuance via a custom backend (no shared hardcoded credentials)
+- IPv6 leak protection (routes IPv6 into the tunnel instead of leaking it to the raw network)
+- Kill switch guidance (deep-links to Android's system-level "block connections without VPN" setting, plus an in-app connection-loss monitor as a secondary safety net)
+- Split tunneling — per-app exclusion list, letting specific apps bypass the VPN
 
 ## Tech stack
 
@@ -61,6 +70,7 @@ This project involved a lot more real infrastructure and systems debugging than 
 - Diagnosed a crash loop (missing foreground service permission) that was silently killing and restarting the app process, which looked like "disconnect doesn't work" but was actually the WireGuard library auto-recovering the last tunnel after each crash-restart
 - Fixed a `CLEARTEXT communication not permitted` error by scoping a network security config exception to the backend's specific IP, rather than disabling Android's HTTPS-by-default policy globally
 - Fixed a Kotlin "Redeclaration" build error caused by an example/template file accidentally being treated as real source code because it still had a `.kt` extension
+- Diagnosed and fixed an ANR (App Not Responding) caused by loading the full installed-apps list synchronously on the UI thread for the split tunneling screen — moved the `PackageManager` lookup to a background coroutine with a loading state
 
 **Backend**
 - Built a minimal device-registration API that generates real WireGuard key pairs via `wg genkey`/`wg pubkey` subprocess calls, tracks IP allocation in SQLite to prevent collisions, and live-registers new peers on a running WireGuard interface without restarting it
@@ -72,7 +82,7 @@ This project involved a lot more real infrastructure and systems debugging than 
 1. Stand up your own WireGuard server (any cloud VPS running Ubuntu works) and note its public IP and server keys.
 2. Set up the backend: copy the `backend/` folder to your server, create a Python virtual environment, `pip install flask`, and run `app.py`. Update `SERVER_PUBLIC_KEY` and `SERVER_ENDPOINT` in `app.py` to match your server.
 3. Allow the Flask user to manage WireGuard peers without a password prompt (`visudo` → `<user> ALL=(ALL) NOPASSWD: /usr/bin/wg`).
-4. Open the relevant ports in your cloud provider's firewall/security group: UDP 51820 (WireGuard) and TCP 5000 (backend API, or your chosen port).
+4. Open the relevant ports in your cloud provider's firewall/security group: UDP 51820 (WireGuard) and your backend's port.
 5. Clone this repo and open it in Android Studio.
 6. In `DeviceConfigManager.kt`, update `REGISTER_URL` to point at your own backend.
 7. If testing over plain HTTP, update `network_security_config.xml` with your server's IP.
@@ -82,7 +92,8 @@ This project involved a lot more real infrastructure and systems debugging than 
 
 - The `/register-device` endpoint has no authentication — anyone with the URL can register a new peer. Fine for solo MVP testing; will need rate-limiting/auth before any public exposure.
 - Backend runs on Flask's development server, not a production WSGI server — fine for testing, not for real traffic.
-- Backend traffic is currently unencrypted HTTP; a real deployment needs HTTPS (e.g. via Let's Encrypt) before this exception should be removed from the Android network security config.
+- Backend traffic is currently unencrypted HTTP; HTTPS via Let's Encrypt requires a domain name and is planned before any public deployment.
+- Single server location; no multi-region support yet.
 
 ## Roadmap
 
@@ -90,9 +101,10 @@ This project involved a lot more real infrastructure and systems debugging than 
 - [x] Custom Android client (connect/disconnect, live status)
 - [x] Local testing hardening — real state tracking, foreground service, crash/lifecycle fixes
 - [x] Per-device backend — dynamic key/IP issuance, no more hardcoded shared config
-- [ ] Kill switch + DNS leak protection
-- [ ] Backend auth/rate-limiting + HTTPS
-- [ ] Traffic obfuscation for restrictive network environments
+- [x] IPv6 leak protection, kill switch guidance, split tunneling
+- [ ] HTTPS for the backend API
+- [ ] Backend auth/rate-limiting
+- [ ] Multi-server/multi-region support
 
 ## Disclaimer
 
