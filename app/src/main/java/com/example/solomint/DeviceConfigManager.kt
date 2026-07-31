@@ -39,6 +39,16 @@ object DeviceConfigManager {
         return DeviceConfig(privateKey, address, serverKey, endpoint, dns)
     }
 
+    fun getExcludedApps(context: Context): Set<String> {
+        val prefs = getPrefs(context)
+        return prefs.getStringSet("excluded_apps", emptySet()) ?: emptySet()
+    }
+
+    fun setExcludedApps(context: Context, packages: Set<String>) {
+        val prefs = getPrefs(context)
+        prefs.edit().putStringSet("excluded_apps", packages).apply()
+    }
+
     fun fetchAndSaveNewConfig(context: Context): DeviceConfig {
         val url = URL(REGISTER_URL)
         val conn = url.openConnection() as HttpURLConnection
